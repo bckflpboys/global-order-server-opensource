@@ -1,7 +1,7 @@
 # New Order Global — Self-Hosted Server
 
 This is the **open-source backend** that pairs with the
-[New Order Global](https://github.com/) Chrome extension. It is the
+[New Order Global](https://github.com/bckflpboys/new-order-global) Chrome extension. It is the
 *minimal* server you need to make the extension work — auth + AI
 generation, nothing more.
 
