@@ -22,6 +22,11 @@ const toolsRoutes = require('./routes/tools');
 const billingRoutes = require('./routes/billing');
 const modelsRoutes = require('./routes/models');
 const conversationsRoutes = require('./routes/conversations');
+const agentRoutes = require('./routes/agent');
+const agentSettingsRoutes = require('./routes/agentSettings');
+const integrationsRoutes = require('./routes/integrations');
+const onboardingRoutes = require('./routes/onboarding');
+const userRoutes = require('./routes/user');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -45,7 +50,7 @@ app.use(
   })
 );
 
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '10mb' }));
 
 // Tiny request logger (no IPs, no headers).
 app.use((req, res, next) => {
@@ -71,6 +76,11 @@ app.use('/api/tools', toolsRoutes);
 app.use('/api/billing', billingRoutes);
 app.use('/api/models', modelsRoutes);
 app.use('/api/conversations', conversationsRoutes);
+app.use('/api/agent', agentRoutes);
+app.use('/api/agent-settings', agentSettingsRoutes);
+app.use('/api/integrations', integrationsRoutes);
+app.use('/api/onboarding', onboardingRoutes);
+app.use('/api/user', userRoutes);
 
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));
 

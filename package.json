@@ -1,7 +1,7 @@
 {
   "name": "new-order-global-server",
   "version": "1.0.0",
-  "description": "Self-hosted backend for the New Order Global Chrome extension",
+  "description": "Self-hosted backend for the New Order Global Chrome extension — with agent, integrations, and AI features",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -15,10 +15,12 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.21.0",
-    "jsonwebtoken": "^9.0.2"
+    "jsonwebtoken": "^9.0.2",
+    "node-cron": "^3.0.3"
   },
   "optionalDependencies": {
-    "mongoose": "^8.8.0"
+    "mongoose": "^8.8.0",
+    "@aws-sdk/client-s3": "^3.600.0"
   },
   "license": "MIT"
 }

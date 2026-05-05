@@ -78,6 +78,13 @@ function makeCollection(name) {
 const usersCol = makeCollection('users');
 const toolsCol = makeCollection('tools');
 const convosCol = makeCollection('conversations');
+const agentSettingsCol = makeCollection('agentSettings');
+const agentTasksCol = makeCollection('agentTasks');
+const domainRulesCol = makeCollection('domainRules');
+const integrationsCol = makeCollection('integrations');
+const onboardingCol = makeCollection('onboarding');
+const scheduledTasksCol = makeCollection('scheduledTasks');
+const userMemoryCol = makeCollection('userMemory');
 
 // ---------- public API ----------
 const users = {
@@ -101,7 +108,8 @@ const users = {
       lastLogin: new Date().toISOString()
     });
   },
-  update: (id, patch) => usersCol.update(id, patch)
+  update: (id, patch) => usersCol.update(id, patch),
+  delete: (id) => usersCol.remove(id)
 };
 
 const tools = {
@@ -164,7 +172,177 @@ const models = {
       defaultModels.find((m) => m.isEnabled) ||
       null
     );
+  },
+  list() {
+    return defaultModels;
   }
+};
+
+// ---------- Agent Settings ----------
+const agentSettings = {
+  findByUser(userId) {
+    return agentSettingsCol.all().find((s) => s.userId === String(userId)) || null;
+  },
+  getOrCreate(userId) {
+    let doc = agentSettingsCol.all().find((s) => s.userId === String(userId));
+    if (!doc) {
+      doc = agentSettingsCol.insert({
+        userId: String(userId),
+        maxSteps: 0,
+        maxScreenshotsPerTask: 0,
+        maxScreenshotsPerStep: 0,
+        screenshotPolicy: { onTaskStart: false, everyNSteps: 0, beforeInteraction: false, afterNavigation: false, onError: false, onCanvasHeavy: true },
+        temperature: null,
+        customRules: '',
+        memoryEnabled: true,
+        autoExtractMemories: true,
+        councilRoles: { strategist: '', executor: '', critic: '', optimizer: '' },
+        maxSubAgents: 3,
+        sessionPersistenceEnabled: false
+      });
+    }
+    return doc;
+  },
+  update: (id, patch) => agentSettingsCol.update(id, patch)
+};
+
+// ---------- Agent Tasks ----------
+const agentTasks = {
+  findByUser(userId, opts = {}) {
+    let rows = agentTasksCol.all().filter((t) => t.userId === String(userId));
+    if (opts.status) rows = rows.filter((t) => t.status === opts.status);
+    if (opts.mode) rows = rows.filter((t) => t.mode === opts.mode);
+    rows.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    if (opts.limit) rows = rows.slice(0, opts.limit);
+    return rows;
+  },
+  findOne(id, userId) {
+    const t = agentTasksCol.findById(id);
+    if (!t) return null;
+    if (userId && t.userId !== String(userId)) return null;
+    return t;
+  },
+  create: (doc) => agentTasksCol.insert({ ...doc, userId: String(doc.userId) }),
+  update: (id, patch) => agentTasksCol.update(id, patch),
+  delete: (id) => agentTasksCol.remove(id),
+  countByUser: (userId) => agentTasksCol.all().filter((t) => t.userId === String(userId)).length,
+  findPendingScheduled: () => agentTasksCol.all().filter((t) => t.scheduledTaskId && t.status === 'pending'),
+  findSubTasks: (parentTaskId) => agentTasksCol.all().filter((t) => t.parentTaskId === String(parentTaskId))
+};
+
+// ---------- Domain Rules ----------
+const domainRules = {
+  findByUser(userId) {
+    return domainRulesCol.all().filter((r) => r.userId === String(userId) && r.enabled !== false);
+  },
+  findByDomain(userId, domain) {
+    return domainRulesCol.all().filter((r) => r.userId === String(userId) && r.enabled !== false && (r.domain === domain || r.domain === '*'));
+  },
+  create: (doc) => domainRulesCol.insert({ ...doc, userId: String(doc.userId), domain: (doc.domain || '').toLowerCase(), enabled: true }),
+  update: (id, patch) => domainRulesCol.update(id, patch),
+  delete: (id) => domainRulesCol.remove(id),
+  countByUser: (userId) => domainRulesCol.all().filter((r) => r.userId === String(userId)).length
+};
+
+// ---------- Integrations ----------
+const integrations = {
+  findByUser(userId) {
+    return integrationsCol.all().find((i) => i.userId === String(userId)) || null;
+  },
+  getOrCreate(userId) {
+    let doc = integrationsCol.all().find((i) => i.userId === String(userId));
+    if (!doc) {
+      doc = integrationsCol.insert({
+        userId: String(userId),
+        telegram: { enabled: false, botToken: '', botId: '', chatId: '', linkCode: '', linkedAt: null, botUsername: '', queuedTaskPrompt: '' },
+        whatsapp: { enabled: false, groupName: 'My Agent', lastSeenMessageId: '', linkedAt: null, verified: false, queuedTaskPrompt: '' },
+        lastInboxConsumed: { source: '', prompt: '', at: null },
+        preferences: {
+          canCloseTabs: true, autoCloseExceedingLimit: true, preferCurrentTab: true,
+          notifyChannel: 'none', notifyOnComplete: true, notifyOnAwaitingUser: true, notifyOnFailure: true,
+          defaultMode: 'copilot', preferredAgentModelId: '',
+          autoConfirmLowRisk: false, verboseLogging: false,
+          research: { minDistinctDomains: 2, maxSearchPages: 1, minWebsitesToVisit: 2, maxLinksPerWebsite: 1, maxPaginatedPages: 1, scrollPasses: 1, verifySources: true }
+        }
+      });
+    }
+    return doc;
+  },
+  update: (id, patch) => integrationsCol.update(id, patch),
+  findByBotId: (botId) => integrationsCol.all().find((i) => i.telegram?.botId === String(botId)) || null
+};
+
+// ---------- Onboarding ----------
+const onboarding = {
+  findByUser(userId) {
+    return onboardingCol.all().find((o) => o.userId === String(userId)) || null;
+  },
+  getOrCreate(userId) {
+    let doc = onboardingCol.all().find((o) => o.userId === String(userId));
+    if (!doc) {
+      doc = onboardingCol.insert({
+        userId: String(userId),
+        tosAccepted: false, tosAcceptedAt: null,
+        privacyAccepted: false, privacyAcceptedAt: null,
+        whereDidYouHearAboutUs: null, whereDidYouHearAboutUsOther: '',
+        intendedFeatures: [], intendedFeaturesOther: '',
+        completed: false, completedAt: null,
+        currentStep: 0, startedAt: new Date().toISOString()
+      });
+    }
+    return doc;
+  },
+  update: (id, patch) => onboardingCol.update(id, patch)
+};
+
+// ---------- Scheduled Tasks ----------
+const scheduledTasks = {
+  findByUser(userId) {
+    const rows = scheduledTasksCol.all().filter((t) => t.userId === String(userId));
+    rows.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+    return rows;
+  },
+  findOne(id, userId) {
+    const t = scheduledTasksCol.findById(id);
+    if (!t) return null;
+    if (userId && t.userId !== String(userId)) return null;
+    return t;
+  },
+  findEnabled() {
+    return scheduledTasksCol.all().filter((t) => t.enabled);
+  },
+  findDue() {
+    const now = new Date();
+    return scheduledTasksCol.all().filter((t) => t.enabled && t.nextRunAt && new Date(t.nextRunAt) <= now);
+  },
+  create: (doc) => scheduledTasksCol.insert({ ...doc, userId: String(doc.userId), enabled: true, nextRunAt: null, lastRunAt: null, lastTaskId: null, lastRunStatus: 'never', lastRunError: '', runCount: 0 }),
+  update: (id, patch) => scheduledTasksCol.update(id, patch),
+  delete: (id) => scheduledTasksCol.remove(id),
+  countByUser: (userId) => scheduledTasksCol.all().filter((t) => t.userId === String(userId)).length
+};
+
+// ---------- User Memory ----------
+const userMemory = {
+  findByUser(userId, opts = {}) {
+    let rows = userMemoryCol.all().filter((m) => m.userId === String(userId));
+    if (opts.status) rows = rows.filter((m) => m.status === opts.status);
+    else rows = rows.filter((m) => m.status === 'active');
+    if (opts.category) rows = rows.filter((m) => m.category === opts.category);
+    if (opts.domain) rows = rows.filter((m) => m.domain === opts.domain || m.domain === '');
+    rows.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+    return rows;
+  },
+  findOne(id, userId) {
+    const m = userMemoryCol.findById(id);
+    if (!m) return null;
+    if (userId && m.userId !== String(userId)) return null;
+    return m;
+  },
+  create: (doc) => userMemoryCol.insert({ ...doc, userId: String(doc.userId), status: doc.status || 'active', confidence: doc.confidence ?? 1, usedCount: 0, lastUsedAt: null }),
+  update: (id, patch) => userMemoryCol.update(id, patch),
+  delete: (id) => userMemoryCol.remove(id),
+  countByUser: (userId, status) => userMemoryCol.all().filter((m) => m.userId === String(userId) && (!status || m.status === status)).length,
+  findByKey: (userId, key) => userMemoryCol.all().find((m) => m.userId === String(userId) && m.key === key && m.status === 'active') || null
 };
 
 async function connect() {
@@ -172,4 +350,4 @@ async function connect() {
   console.log(`[storage] file backend ready (DATA_DIR=${DATA_DIR})`);
 }
 
-module.exports = { backend: 'file', connect, users, tools, conversations, models };
+module.exports = { backend: 'file', connect, users, tools, conversations, models, agentSettings, agentTasks, domainRules, integrations, onboarding, scheduledTasks, userMemory };
