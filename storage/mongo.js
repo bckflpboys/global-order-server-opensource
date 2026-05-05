@@ -2,7 +2,7 @@
 // Uses mongoose. Documents are returned as plain objects with `_id` as a string.
 
 const mongoose = require('mongoose');
-const defaultModels = require('./default-models');
+const { getModels } = require('./env-models');
 
 // ---------- Schemas ----------
 const userSchema = new mongoose.Schema(
@@ -320,25 +320,25 @@ const conversations = {
   }
 };
 
-// Models are read from the static seed file — no admin UI to manage them.
+// Models are read from env vars (via env-models.js) — no admin UI to manage them.
 const models = {
   async findEnabled() {
-    return defaultModels
+    return getModels()
       .filter((m) => m.isEnabled)
       .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   },
   async findById(modelId) {
-    return defaultModels.find((m) => m.modelId === modelId && m.isEnabled) || null;
+    return getModels().find((m) => m.modelId === modelId && m.isEnabled) || null;
   },
   async findDefault() {
     return (
-      defaultModels.find((m) => m.isDefault && m.isEnabled) ||
-      defaultModels.find((m) => m.isEnabled) ||
+      getModels().find((m) => m.isDefault && m.isEnabled) ||
+      getModels().find((m) => m.isEnabled) ||
       null
     );
   },
   async list() {
-    return defaultModels;
+    return getModels();
   }
 };
 

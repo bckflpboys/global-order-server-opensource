@@ -16,6 +16,9 @@
 //   db.userMemory:    { findByUser, findOne, create, update, delete, countByUser, findByKey }
 //   db.connect()      — initialise connection / load file
 //
+// Models are loaded from OPENROUTER_MODEL_* env vars (see env-models.js).
+// If no env vars are set, falls back to default-models.js.
+//
 // Documents always include a string `_id` (so the extension code that
 // references either `_id` or `id` works without modification).
 

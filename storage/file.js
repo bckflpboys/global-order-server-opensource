@@ -7,7 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const defaultModels = require('./default-models');
+const { getModels } = require('./env-models');
 
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 
@@ -159,22 +159,22 @@ const conversations = {
 
 const models = {
   findEnabled() {
-    return defaultModels
+    return getModels()
       .filter((m) => m.isEnabled)
       .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   },
   findById(modelId) {
-    return defaultModels.find((m) => m.modelId === modelId && m.isEnabled) || null;
+    return getModels().find((m) => m.modelId === modelId && m.isEnabled) || null;
   },
   findDefault() {
     return (
-      defaultModels.find((m) => m.isDefault && m.isEnabled) ||
-      defaultModels.find((m) => m.isEnabled) ||
+      getModels().find((m) => m.isDefault && m.isEnabled) ||
+      getModels().find((m) => m.isEnabled) ||
       null
     );
   },
   list() {
-    return defaultModels;
+    return getModels();
   }
 };
 

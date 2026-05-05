@@ -104,6 +104,16 @@ async function start() {
     console.warn('⚠️  JWT_SECRET is not set — using a default. Set one in .env for real deployments.');
   }
   await db.connect();
+
+  // Log loaded models
+  const { loadFromEnv } = require('./storage/env-models');
+  const envModels = loadFromEnv();
+  if (envModels) {
+    console.log(`   Models:   ${envModels.length} from OPENROUTER_MODEL_* env vars`);
+  } else {
+    console.log(`   Models:   using defaults (set OPENROUTER_MODEL_* env vars to customise)`);
+  }
+
   app.listen(PORT, () => {
     console.log(`\n🚀 Self-hosted API on http://localhost:${PORT}`);
     console.log(`   Storage:  ${db.backend}`);

@@ -11,13 +11,15 @@ module.exports = [
     modelId: 'gemini-2-5-flash',
     name: 'Gemini 2.5 Flash',
     openRouterId: 'google/gemini-2.5-flash',
-    tier: 'standard',
+    tier: 'free',
     description: 'Fast, cheap, great for most tools',
     contextWindow: 1000000,
     creditsPerInputToken: 0,
     creditsPerOutputToken: 0,
     isEnabled: true,
     isDefault: true,
+    isVisionModel: true,
+    isAgentModel: true,
     sortOrder: 1
   },
   {
@@ -32,6 +34,8 @@ module.exports = [
     creditsPerOutputToken: 0,
     isEnabled: true,
     isDefault: false,
+    isVisionModel: true,
+    isAgentModel: true,
     sortOrder: 2
   },
   {
@@ -46,6 +50,8 @@ module.exports = [
     creditsPerOutputToken: 0,
     isEnabled: true,
     isDefault: false,
+    isVisionModel: false,
+    isAgentModel: false,
     sortOrder: 3
   }
 ];
