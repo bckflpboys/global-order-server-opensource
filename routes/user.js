@@ -32,8 +32,14 @@ router.patch('/profile', requireAuth, async (req, res) => {
         displayName: user.displayName,
         role: user.role,
         plan: user.plan || 'unlimited',
+        subscription: {
+          plan: user.subscription?.plan || 'super_agent',
+          status: user.subscription?.status || 'active'
+        },
         credits: user.credits ?? 999999,
-        onboardingCompleted: !!user.onboardingCompleted
+        onboardingCompleted: !!user.onboardingCompleted,
+        builderModel: user.builderModel || null,
+        agentModel: user.agentModel || null
       }
     });
   } catch (err) {
@@ -77,6 +83,43 @@ router.patch('/password', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('Password change error:', err.message);
     res.status(500).json({ error: 'Failed to change password' });
+  }
+});
+
+// ============================================
+// GET /api/user/model-preferences — Get builder/agent model prefs
+// ============================================
+router.get('/model-preferences', requireAuth, async (req, res) => {
+  try {
+    const user = await db.users.findById(String(req.userId));
+    if (!user) return res.status(404).json({ error: 'Account not found' });
+    res.json({
+      builderModel: user.builderModel || null,
+      agentModel: user.agentModel || null
+    });
+  } catch (err) {
+    console.error('Model preferences error:', err.message);
+    res.status(500).json({ error: 'Failed to get model preferences' });
+  }
+});
+
+// ============================================
+// PUT /api/user/model-preferences — Set builder/agent model prefs
+// ============================================
+router.put('/model-preferences', requireAuth, async (req, res) => {
+  try {
+    const { builderModel, agentModel } = req.body;
+    const patch = {};
+    if (builderModel !== undefined) patch.builderModel = String(builderModel);
+    if (agentModel !== undefined) patch.agentModel = String(agentModel);
+    const user = await db.users.update(String(req.userId), patch);
+    res.json({
+      builderModel: user.builderModel || null,
+      agentModel: user.agentModel || null
+    });
+  } catch (err) {
+    console.error('Model preferences update error:', err.message);
+    res.status(500).json({ error: 'Failed to update model preferences' });
   }
 });
 

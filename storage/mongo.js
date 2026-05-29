@@ -12,11 +12,19 @@ const userSchema = new mongoose.Schema(
     displayName: { type: String, default: '' },
     role: { type: String, enum: ['user', 'admin'], default: 'user' },
     plan: { type: String, default: 'unlimited' },
+    subscription: {
+      plan: { type: String, enum: ['none', 'monthly', 'yearly', 'super_agent'], default: 'super_agent' },
+      status: { type: String, enum: ['none', 'active', 'cancelled', 'expired', 'past_due', 'paused'], default: 'active' },
+      currentPeriodEnd: { type: Date, default: null },
+      cancelAtPeriodEnd: { type: Boolean, default: false }
+    },
     credits: { type: Number, default: 999999 },
     totalCreditsPurchased: { type: Number, default: 0 },
     totalCreditsUsed: { type: Number, default: 0 },
     aiRequestsUsed: { type: Number, default: 0 },
-    isSuspended: { type: Boolean, default: false },
+    onboardingCompleted: { type: Boolean, default: false },
+    builderModel: { type: String, default: null },
+    agentModel: { type: String, default: null },
     lastLogin: { type: Date, default: Date.now }
   },
   { timestamps: true }
@@ -74,6 +82,15 @@ const conversationSchema = new mongoose.Schema(
 );
 
 // ---------- Additional Schemas ----------
+const councilMemberSchema = new mongoose.Schema({
+  id: { type: String, required: true, maxlength: 60 },
+  name: { type: String, required: true, maxlength: 40, trim: true },
+  description: { type: String, default: '', maxlength: 300, trim: true },
+  model: { type: String, default: '', maxlength: 120, trim: true },
+  enabled: { type: Boolean, default: true },
+  isBuiltIn: { type: Boolean, default: false }
+}, { _id: false });
+
 const agentSettingsSchema = new mongoose.Schema({
   userId: { type: String, required: true, unique: true, index: true },
   maxSteps: { type: Number, default: 0 },
@@ -85,8 +102,21 @@ const agentSettingsSchema = new mongoose.Schema({
   memoryEnabled: { type: Boolean, default: true },
   autoExtractMemories: { type: Boolean, default: true },
   councilRoles: { type: mongoose.Schema.Types.Mixed, default: {} },
+  councilEnabled: { type: Boolean, default: true },
+  councilMembers: { type: [councilMemberSchema], default: undefined },
   maxSubAgents: { type: Number, default: 3 },
-  sessionPersistenceEnabled: { type: Boolean, default: false }
+  sessionPersistenceEnabled: { type: Boolean, default: true },
+  autoExtensionUpdates: { type: Boolean, default: false },
+  skillSharing: {
+    miningEnabled: { type: Boolean, default: false },
+    publishToGlobalPool: { type: Boolean, default: false },
+    learnFromGlobalPool: { type: Boolean, default: false },
+    allowGreyDownload: { type: Boolean, default: false },
+    allowGreyUpload: { type: Boolean, default: false },
+    blockedDomains: { type: [String], default: [] }
+  },
+  newWindowForResearch: { type: Boolean, default: false },
+  stepPatternHintsEnabled: { type: Boolean, default: false }
 }, { timestamps: true });
 
 const agentStepSchema = new mongoose.Schema({
@@ -132,6 +162,7 @@ const agentTaskSchema = new mongoose.Schema({
   goalLedger: { type: mongoose.Schema.Types.Mixed, default: {} },
   taskType: { type: String, enum: ['research','action','mixed'], default: 'action', index: true },
   researchNotes: { type: [mongoose.Schema.Types.Mixed], default: [] },
+  metadata: { type: mongoose.Schema.Types.Mixed, default: () => ({}) },
   capturedFiles: { type: [mongoose.Schema.Types.Mixed], default: [] }
 }, { timestamps: true });
 agentTaskSchema.index({ userId: 1, createdAt: -1 });

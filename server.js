@@ -3,12 +3,13 @@
 //
 // What this server does:
 //   - Authenticates a user (JWT) and stores their tools/conversations
-//   - Proxies AI generation requests to OpenRouter using YOUR API key
+//   - Proxies AI generation requests to OpenRouter, OpenAI, or DeepSeek
+//     using YOUR API keys (configured via environment variables)
 //
 // What it explicitly does NOT do:
 //   - No payment processing, no credits, no rate limiting
 //   - No telemetry, no audit logs, no admin routes
-//   - No reaching out to any third-party site beyond OpenRouter
+//   - No reaching out to any third-party site beyond the configured AI provider
 
 require('dotenv').config();
 
@@ -97,8 +98,11 @@ app.use((err, req, res, _next) => {
 
 // ---------- bootstrap ----------
 async function start() {
-  if (!process.env.OPENROUTER_API_KEY) {
-    console.warn('⚠️  OPENROUTER_API_KEY is not set — AI generation will fail until you set it.');
+  const hasOpenRouter = !!process.env.OPENROUTER_API_KEY;
+  const hasOpenAI = !!process.env.OPENAI_API_KEY;
+  const hasDeepSeek = !!process.env.DEEPSEEK_API_KEY;
+  if (!hasOpenRouter && !hasOpenAI && !hasDeepSeek) {
+    console.warn('⚠️  No AI provider API key set — set OPENROUTER_API_KEY, OPENAI_API_KEY, or DEEPSEEK_API_KEY in .env');
   }
   if (!process.env.JWT_SECRET) {
     console.warn('⚠️  JWT_SECRET is not set — using a default. Set one in .env for real deployments.');

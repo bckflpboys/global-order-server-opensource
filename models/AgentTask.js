@@ -361,7 +361,12 @@ const agentTaskSchema = new mongoose.Schema({
     description: { type: String, default: '' },
     capturedAt: { type: Date, default: Date.now },
     capturedAtStep: { type: Number, default: 0 }
-  }]
+  }],
+
+  // Free-form metadata bag — non-structural flags that don't warrant their
+  // own top-level field. Used for: autoFinalized, skillId, usedSkillId,
+  // safetyTag, minedAt, etc.
+  metadata: { type: mongoose.Schema.Types.Mixed, default: () => ({}) }
 }, { timestamps: true });
 
 // Index for listing tasks by user, sorted by recent

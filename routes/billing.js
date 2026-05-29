@@ -4,15 +4,9 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/auth');
 const db = require('../storage');
+const { SUBSCRIPTION_PLANS } = require('../services/agentTiers');
 
 const router = express.Router();
-
-// Subscription plans — exposed for extension UI compatibility (no actual payment)
-const SUBSCRIPTION_PLANS = {
-  monthly:     { label: 'Monthly',     credits: 50,   price: 0, interval: 'month',  agentTier: 'pro',         badge: null },
-  yearly:      { label: 'Yearly',      credits: 200,  price: 0, interval: 'year',   agentTier: 'pro',         badge: 'Popular' },
-  super_agent: { label: 'Super Agent', credits: 9999, price: 0, interval: 'year',   agentTier: 'super_agent', badge: 'Self-Hosted' }
-};
 
 router.get('/credits', requireAuth, async (req, res) => {
   const toolCount = await db.tools.countByUser(String(req.userId));

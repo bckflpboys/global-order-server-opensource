@@ -39,11 +39,19 @@ function publicUser(u) {
     displayName: u.displayName || '',
     role: u.role || 'user',
     plan: u.plan || 'unlimited',
+    subscription: {
+      plan: u.subscription?.plan || 'super_agent',
+      status: u.subscription?.status || 'active',
+      currentPeriodEnd: u.subscription?.currentPeriodEnd || null,
+      cancelAtPeriodEnd: u.subscription?.cancelAtPeriodEnd || false
+    },
     credits: u.credits ?? 999999,
     totalCreditsPurchased: u.totalCreditsPurchased || 0,
     totalCreditsUsed: u.totalCreditsUsed || 0,
     aiRequestsUsed: u.aiRequestsUsed || 0,
-    isSuspended: false,
+    onboardingCompleted: !!u.onboardingCompleted,
+    builderModel: u.builderModel || null,
+    agentModel: u.agentModel || null,
     createdAt: u.createdAt,
     lastLogin: u.lastLogin
   };

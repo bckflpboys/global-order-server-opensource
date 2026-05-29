@@ -1,10 +1,9 @@
 // Global Executive — Agent Service
 // System prompt, LLM communication, and response parsing for the browser agent
 
-const { COUNCIL_PROMPT_EXTENSION, AGENT_TIERS } = require('./agentTiers');
+const { COUNCIL_PROMPT_EXTENSION, AGENT_TIERS, buildCouncilPromptExtension } = require('./agentTiers');
 const { fetchWithRetry } = require('./httpRetry');
-
-const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const { resolveProvider, buildBody } = require('./aiProviders');
 
 // ============================================
 // Agent System Prompt
@@ -1213,12 +1212,9 @@ Rules:
 // Plan next action for the agent
 // ============================================
 async function planNextAction(task, pageState, options = {}) {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) {
-    throw new Error('OpenRouter API key not configured');
-  }
+  const prov = resolveProvider(options.modelConfig || options.model || null);
+  const model = prov.model;
 
-  const model = options.model || process.env.OPENROUTER_MODEL || 'google/gemini-2.5-flash';
   const tierConfig = options.tierConfig || AGENT_TIERS.free;
   const sessionId = options.sessionId || null;
 
@@ -1227,7 +1223,11 @@ async function planNextAction(task, pageState, options = {}) {
   let systemPrompt = AGENT_SYSTEM_PROMPT;
   systemPrompt += (mode === 'autopilot' ? AUTOPILOT_MODE_BLOCK : COPILOT_MODE_BLOCK);
   if (tierConfig.useCouncilPrompt) {
-    systemPrompt += COUNCIL_PROMPT_EXTENSION;
+    if (tierConfig.councilMembers && tierConfig.councilEnabled !== false) {
+      systemPrompt += buildCouncilPromptExtension(tierConfig.councilMembers);
+    } else {
+      systemPrompt += COUNCIL_PROMPT_EXTENSION;
+    }
   }
   // Long-term user memory block (injected by route)
   if (options.memoryBlock && typeof options.memoryBlock === 'string') {
@@ -1805,15 +1805,10 @@ async function planNextAction(task, pageState, options = {}) {
       }
     }
 
-    const response = await fetchWithRetry(OPENROUTER_API_URL, {
+    const response = await fetchWithRetry(prov.url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-        'HTTP-Referer': process.env.FRONTEND_URL || 'https://global-order.32d.one',
-        'X-Title': 'Global Executive'
-      },
-      body: JSON.stringify({
+      headers: prov.headers,
+      body: JSON.stringify(buildBody(prov, {
         model,
         messages: [
           { role: 'system', content: systemPrompt },
@@ -1822,12 +1817,12 @@ async function planNextAction(task, pageState, options = {}) {
         temperature: Math.max(0, Math.min(1, temperature + tempAdj)),
         max_tokens: maxTokens,
         ...(sessionId ? { session_id: sessionId } : {})
-      })
+      }))
     });
 
     if (!response.ok) {
       const errorData = await response.text();
-      console.error('OpenRouter API error (Agent):', response.status, errorData);
+      console.error(`AI API error (${prov.provider}):`, response.status, errorData);
       throw new Error(`AI service error (${response.status})`);
     }
 
@@ -2112,10 +2107,8 @@ function substituteBriefingInputs(value, briefing) {
 // Returns { plan, requiredInputs, permissionsRequested, usage, model }
 // ============================================
 async function planTask(originalPrompt, options = {}) {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error('OpenRouter API key not configured');
-
-  const model = options.model || process.env.OPENROUTER_MODEL || 'google/gemini-2.5-flash';
+  const prov = resolveProvider(options.modelConfig || options.model || null);
+  const model = prov.model;
   const tierConfig = options.tierConfig || AGENT_TIERS.free;
 
   const userMsg = [
@@ -2138,15 +2131,10 @@ async function planTask(originalPrompt, options = {}) {
     plannerSystem += `\n\n## MEMORY-DRIVEN PLANNING RULES\n- If a fact the task needs (email, address, name, preference, usual account) is ALREADY in USER MEMORY above, do NOT list it in \`requiredInputs\`. Instead, mention in \`summary\` that you'll use the known value.\n- If memory has multiple candidate values (e.g. two emails), add a single \`requiredInputs\` entry of type \`select\` with those candidates as \`options\` and a clear \`description\` so the user can pick.\n- For unverified memories (marked "unverified" above), you MAY list them as \`requiredInputs\` with the remembered value as the default \`description\`, so the user can confirm.`;
   }
 
-  const response = await fetchWithRetry(OPENROUTER_API_URL, {
+  const response = await fetchWithRetry(prov.url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-      'HTTP-Referer': process.env.FRONTEND_URL || 'https://global-order.32d.one',
-      'X-Title': 'Global Executive - Planner'
-    },
-    body: JSON.stringify({
+    headers: prov.headers,
+    body: JSON.stringify(buildBody(prov, {
       model,
       messages: [
         { role: 'system', content: plannerSystem },
@@ -2154,12 +2142,12 @@ async function planTask(originalPrompt, options = {}) {
       ],
       temperature: 0.2,
       max_tokens: 1500
-    })
+    }))
   });
 
   if (!response.ok) {
     const errorData = await response.text();
-    console.error('OpenRouter API error (Planner):', response.status, errorData);
+    console.error(`AI API error (Planner, ${prov.provider}):`, response.status, errorData);
     throw new Error(`AI planner error (${response.status})`);
   }
 

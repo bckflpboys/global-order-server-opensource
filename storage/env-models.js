@@ -6,6 +6,8 @@
 //   OPENROUTER_MODEL_{TIER}_{N}_VISION     = true/false
 //   OPENROUTER_MODEL_{TIER}_{N}_AGENT      = true/false
 //   OPENROUTER_MODEL_{TIER}_{N}_VISION_AGENT = true/false
+//   OPENROUTER_MODEL_{TIER}_{N}_PROVIDER   = openrouter|openai|deepseek (default: openrouter)
+//   OPENROUTER_MODEL_{TIER}_{N}_API_MODEL  = provider-specific model id (default: same as openRouterId)
 //
 // TIER = FREE | STANDARD | PREMIUM
 // N    = 1..10 (or more — the loader scans until it finds a blank slot)
@@ -64,12 +66,19 @@ function loadFromEnv() {
       const isVision      = parseBool(process.env[visionKey]);
       const isAgent       = parseBool(process.env[agentKey]);
       const isVisionAgent = parseBool(process.env[visionAgentKey]);
+      const providerKey   = `OPENROUTER_MODEL_${tier}_${n}_PROVIDER`;
+      const apiModelKey   = `OPENROUTER_MODEL_${tier}_${n}_API_MODEL`;
+      const provider      = (process.env[providerKey] || 'openrouter').toLowerCase();
+      const apiModelId    = (process.env[apiModelKey] || '').trim() || openRouterId;
 
       models.push({
         _id: deriveModelId(openRouterId),
         modelId: deriveModelId(openRouterId),
         name: deriveName(openRouterId),
         openRouterId,
+        provider,
+        apiModelId,
+        allowedPlans: [],
         tier: tierMap[tier],
         description: '',
         contextWindow: 128000,

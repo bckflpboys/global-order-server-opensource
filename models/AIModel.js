@@ -13,9 +13,34 @@ const aiModelSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  // Legacy field — kept for back-compat. For new models, prefer `apiModelId`
+  // combined with `provider`. Reads/writes still mirror to apiModelId.
   openRouterId: {
     type: String,
     required: true
+  },
+  // Which AI provider this model is served by. Determines API URL + key.
+  // - 'openrouter' (default) uses OPENROUTER_API_KEY
+  // - 'openai'     uses OPENAI_API_KEY
+  // - 'deepseek'   uses DEEPSEEK_API_KEY
+  provider: {
+    type: String,
+    enum: ['openrouter', 'openai', 'deepseek'],
+    default: 'openrouter'
+  },
+  // Provider-specific model identifier (e.g. 'openai/gpt-4o-mini' for
+  // openrouter, 'gpt-4o-mini' for openai, 'deepseek-chat' for deepseek).
+  // Falls back to `openRouterId` when empty for back-compat.
+  apiModelId: {
+    type: String,
+    default: ''
+  },
+  // Which subscription plans are allowed to use this model. Empty array
+  // means "everyone" (no gating). Self-hosted: always empty (no gating).
+  allowedPlans: {
+    type: [String],
+    enum: ['free', 'monthly', 'yearly', 'super_agent'],
+    default: []
   },
   tier: {
     type: String,
@@ -30,16 +55,16 @@ const aiModelSchema = new mongoose.Schema({
     type: Number,
     default: 128000
   },
-  // Credit cost per 1K tokens (10 credits ≈ $1 USD)
+  // Credit cost per 1K tokens — self-hosted: not enforced (unlimited credits)
   creditsPerInputToken: {
     type: Number,
     required: true,
-    default: 0.01
+    default: 0
   },
   creditsPerOutputToken: {
     type: Number,
     required: true,
-    default: 0.05
+    default: 0
   },
   isEnabled: {
     type: Boolean,
@@ -53,8 +78,6 @@ const aiModelSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  // Whether this model can accept image_url content (used by the agent's
-  // screenshot feature). Only vision-capable models should have this set.
   isVisionModel: {
     type: Boolean,
     default: false
@@ -64,7 +87,5 @@ const aiModelSchema = new mongoose.Schema({
     default: 0
   }
 }, { timestamps: true });
-
-
 
 module.exports = mongoose.model('AIModel', aiModelSchema);

@@ -75,7 +75,11 @@ router.put('/agent-settings', async (req, res) => {
       memoryEnabled: b.memoryEnabled !== false,
       autoExtractMemories: b.autoExtractMemories !== false,
       maxSubAgents: clampNum(b.maxSubAgents, 10, false),
-      sessionPersistenceEnabled: !!b.sessionPersistenceEnabled
+      sessionPersistenceEnabled: !!b.sessionPersistenceEnabled,
+      councilEnabled: b.councilEnabled !== false,
+      newWindowForResearch: !!b.newWindowForResearch,
+      stepPatternHintsEnabled: b.stepPatternHintsEnabled !== false,
+      autoExtensionUpdates: !!b.autoExtensionUpdates
     };
 
     if (typeof b.temperature === 'number' && b.temperature >= 0 && b.temperature <= 1) {
@@ -92,6 +96,35 @@ router.put('/agent-settings', async (req, res) => {
         }
       }
       updates.councilRoles = roles;
+    }
+
+    // Council members — new-style array of {id, name, description, model, enabled, isBuiltIn}
+    if (Array.isArray(b.councilMembers)) {
+      const members = b.councilMembers
+        .filter(m => m && typeof m === 'object' && m.id && m.name)
+        .map(m => ({
+          id: String(m.id || '').slice(0, 60),
+          name: String(m.name || '').trim().slice(0, 40),
+          description: String(m.description || '').trim().slice(0, 300),
+          model: String(m.model || '').trim().slice(0, 120),
+          enabled: m.enabled !== false,
+          isBuiltIn: !!m.isBuiltIn
+        }));
+      updates.councilMembers = members;
+    }
+
+    // Skill sharing toggles
+    if (b.skillSharing && typeof b.skillSharing === 'object') {
+      updates.skillSharing = {
+        miningEnabled: !!b.skillSharing.miningEnabled,
+        publishToGlobalPool: !!b.skillSharing.publishToGlobalPool,
+        learnFromGlobalPool: !!b.skillSharing.learnFromGlobalPool,
+        allowGreyDownload: !!b.skillSharing.allowGreyDownload,
+        allowGreyUpload: !!b.skillSharing.allowGreyUpload,
+        blockedDomains: Array.isArray(b.skillSharing.blockedDomains)
+          ? b.skillSharing.blockedDomains.filter(d => typeof d === 'string').slice(0, 50)
+          : []
+      };
     }
 
     let doc = await db.agentSettings.findByUser(String(req.userId));

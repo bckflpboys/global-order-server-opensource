@@ -37,6 +37,30 @@ const councilRolesSchema = new mongoose.Schema({
   optimizer:  { type: String, default: '' }
 }, { _id: false });
 
+// Council member — new-style per-member definition (replaces the legacy
+// councilRoles map). Built-in members have isBuiltIn=true and their name
+// is locked in the UI; users can toggle enabled, edit description, and
+// override the model. Custom members are appended after the built-ins.
+const councilMemberSchema = new mongoose.Schema({
+  id:          { type: String, required: true, maxlength: 60 },
+  name:        { type: String, required: true, maxlength: 40, trim: true },
+  description: { type: String, default: '', maxlength: 300, trim: true },
+  model:       { type: String, default: '', maxlength: 120, trim: true },
+  enabled:     { type: Boolean, default: true },
+  isBuiltIn:   { type: Boolean, default: false }
+}, { _id: false });
+
+// Skill sharing toggles — controls whether the agent mines skills from
+// completed tasks and whether those skills are shared globally.
+const skillSharingSchema = new mongoose.Schema({
+  miningEnabled:       { type: Boolean, default: false },
+  publishToGlobalPool: { type: Boolean, default: false },
+  learnFromGlobalPool: { type: Boolean, default: false },
+  allowGreyDownload:   { type: Boolean, default: false },
+  allowGreyUpload:     { type: Boolean, default: false },
+  blockedDomains:      { type: [String], default: [] }
+}, { _id: false });
+
 const agentSettingsSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -69,8 +93,12 @@ const agentSettingsSchema = new mongoose.Schema({
   // If false, only manual UI entries are stored.
   autoExtractMemories: { type: Boolean, default: true },
 
-  // ---- Council role assignment (Super Agent) ----
+  // ---- Council role assignment (legacy — kept for migration) ----
   councilRoles: { type: councilRolesSchema, default: () => ({}) },
+
+  // ---- Council master switch and member roster ----
+  councilEnabled: { type: Boolean, default: true },
+  councilMembers: { type: [councilMemberSchema], default: undefined },
 
   // ---- Sub-agent mode (Super Agent) ----
   // Default max parallel workers when the agent spawns sub-agents.
@@ -78,7 +106,19 @@ const agentSettingsSchema = new mongoose.Schema({
 
   // ---- Session persistence (Super Agent) ----
   // If true, completed tasks save their state for `resume yesterday` flows.
-  sessionPersistenceEnabled: { type: Boolean, default: false }
+  sessionPersistenceEnabled: { type: Boolean, default: true },
+
+  // ---- Auto extension updates ----
+  autoExtensionUpdates: { type: Boolean, default: false },
+
+  // ---- Skill sharing ----
+  skillSharing: { type: skillSharingSchema, default: () => ({}) },
+
+  // ---- Research mode ----
+  newWindowForResearch: { type: Boolean, default: false },
+
+  // ---- Step pattern hints ----
+  stepPatternHintsEnabled: { type: Boolean, default: false }
 }, { timestamps: true });
 
 module.exports = mongoose.model('AgentSettings', agentSettingsSchema);

@@ -1,7 +1,9 @@
-// New Order Global — OpenRouter AI Service
-// Handles communication with OpenRouter API for tool generation
+// New Order Global — AI Service (OpenRouter / OpenAI / DeepSeek)
+// Handles communication with the configured AI provider for tool generation.
+// The legacy filename is preserved for back-compat; multi-provider routing
+// is handled by ./aiProviders.js.
 
-const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const { resolveProvider, buildBody } = require('./aiProviders');
 
 // ============================================
 // System Prompt — The brain of tool generation
@@ -278,12 +280,9 @@ window.parent.postMessage({ type: 'deleteData', key: 'someKey' }, '*');
 // Generate a tool from user prompt
 // ============================================
 async function generateToolFromPrompt(prompt, context = {}) {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) {
-    throw new Error('OpenRouter API key not configured');
-  }
-
-  const model = context.model || process.env.OPENROUTER_MODEL || 'google/gemini-2.5-flash';
+  // Prefer modelConfig (full model doc) — falls back to legacy `model` string.
+  const prov = resolveProvider(context.modelConfig || context.model || null);
+  const model = prov.model;
   const sessionId = context.sessionId || null;
 
   // Build context message
@@ -302,28 +301,24 @@ async function generateToolFromPrompt(prompt, context = {}) {
     ? `${prompt}\n\n[Context: ${contextInfo}]`
     : prompt;
 
-  const response = await fetch(OPENROUTER_API_URL, {
+  const response = await fetch(prov.url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-      'HTTP-Referer': process.env.OPENROUTER_REFERER || 'http://localhost:3001',
-      'X-Title': process.env.OPENROUTER_APP_TITLE || 'New Order Self-Hosted'
-    },
-    body: JSON.stringify({
+    headers: prov.headers,
+    body: JSON.stringify(buildBody(prov, {
       model,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userMessage }
       ],
       temperature: 0.4,
-      max_tokens: 12000
-    })
+      max_tokens: 12000,
+      ...(sessionId ? { session_id: sessionId } : {})
+    }))
   });
 
   if (!response.ok) {
     const errorData = await response.text();
-    console.error('OpenRouter API error:', response.status, errorData);
+    console.error(`AI API error (${prov.provider}):`, response.status, errorData);
     throw new Error(`AI service error (${response.status})`);
   }
 
@@ -402,12 +397,8 @@ async function generateToolFromPrompt(prompt, context = {}) {
 // Iterate on existing tool
 // ============================================
 async function iterateToolFromFeedback(existingTool, feedback, chatHistory = [], options = {}) {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) {
-    throw new Error('OpenRouter API key not configured');
-  }
-
-  const model = options.model || process.env.OPENROUTER_MODEL || 'google/gemini-2.5-flash';
+  const prov = resolveProvider(options.modelConfig || options.model || null);
+  const model = prov.model;
   const sessionId = options.sessionId || null;
 
   // Build messages from chat history
@@ -419,24 +410,20 @@ async function iterateToolFromFeedback(existingTool, feedback, chatHistory = [],
     })),
     {
       role: 'user',
-      content: `Here is the current tool code:\n\nName: ${existingTool.name}\nTarget Sites: ${existingTool.targetSites?.join(', ')}\n\nJavaScript:\n${existingTool.contentScript}\n\nCSS:\n${existingTool.styles || 'none'}\n\nUser feedback / changes requested:\n${feedback}\n\nPlease update the tool based on this feedback. Return the complete updated tool as JSON.`
+      content: `Here is the current tool code:\n\nName: ${existingTool.name}\nTarget Sites: ${existingTool.targetSites?.join(', ')}\n\nJavaScript:\n${existingTool.contentScript}\n\nCSS:\n${existingTool.styles || 'none'}\n\nDashboard HTML:\n${existingTool.dashboardHTML || 'none'}\n\nUser feedback / changes requested:\n${feedback}\n\nPlease update the tool based on this feedback. Return the complete updated tool as JSON (including the dashboardHTML field).`
     }
   ];
 
-  const response = await fetch(OPENROUTER_API_URL, {
+  const response = await fetch(prov.url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-      'HTTP-Referer': process.env.OPENROUTER_REFERER || 'http://localhost:3001',
-      'X-Title': process.env.OPENROUTER_APP_TITLE || 'New Order Self-Hosted'
-    },
-    body: JSON.stringify({
+    headers: prov.headers,
+    body: JSON.stringify(buildBody(prov, {
       model,
       messages,
       temperature: 0.4,
-      max_tokens: 12000
-    })
+      max_tokens: 12000,
+      ...(sessionId ? { session_id: sessionId } : {})
+    }))
   });
 
   if (!response.ok) {
@@ -500,29 +487,27 @@ async function iterateToolFromFeedback(existingTool, feedback, chatHistory = [],
 // Streaming chat completion — yields chunks as they arrive
 // ============================================
 async function* streamChatCompletion(messages, model, options = {}) {
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) throw new Error('OpenRouter API key not configured');
+  // `model` may be a string (legacy) or already-resolved provider info.
+  // Prefer options.modelConfig when available so we route to the right provider.
+  const prov = resolveProvider(options.modelConfig || model || null);
+  const resolvedModel = prov.model;
 
-  const response = await fetch(OPENROUTER_API_URL, {
+  const response = await fetch(prov.url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`,
-      'HTTP-Referer': process.env.OPENROUTER_REFERER || 'http://localhost:3001',
-      'X-Title': process.env.OPENROUTER_APP_TITLE || 'New Order Self-Hosted'
-    },
-    body: JSON.stringify({
-      model,
+    headers: prov.headers,
+    body: JSON.stringify(buildBody(prov, {
+      model: resolvedModel,
       messages,
       temperature: options.temperature || 0.4,
       max_tokens: options.maxTokens || 12000,
-      stream: true
-    })
+      stream: true,
+      ...(options.sessionId ? { session_id: options.sessionId } : {})
+    }))
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error('OpenRouter streaming error:', response.status, errorText);
+    console.error(`AI streaming error (${prov.provider}):`, response.status, errorText);
     throw new Error(`AI service error (${response.status})`);
   }
 

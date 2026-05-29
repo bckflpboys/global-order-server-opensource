@@ -16,18 +16,26 @@ function helpText() {
     'Send any natural-language message and I will talk to the active task,',
     'or start a fresh one when none is running.',
     '',
-    '/help — This message',
-    '/account — Your plan & usage',
-    '/tasks — List active tasks',
-    '/cancel [id] — Cancel task (or all if no id)',
-    '/new-task <prompt> — Queue a new task',
-    '/new-task-close <prompt> — Cancel running + queue new',
-    '/copilot — Set co-pilot mode (asks before risky steps)',
-    '/autopilot — Set auto-pilot mode (runs without asking)',
-    '/mode — Show current default mode',
-    '/models — List available agent models',
-    '/model <id> — Set preferred agent model',
-    '/unlink — Disconnect this chat'
+    '/new-task <prompt>  — start a brand-new task (queued alongside any existing one)',
+    '/new-task-close <prompt>  — stop ALL current tasks, then start a new one',
+    '/help  — show this list',
+    '/account  — your plan, credits and usage',
+    '/tasks  — list your active (running / awaiting) tasks',
+    '/current  — show which task your messages are routed to',
+    '/switch <id>  — route your next messages to a different active task (short id from /tasks)',
+    '/cancel  — stop ALL running tasks',
+    '/cancel <id>  — stop one task by short id (last 6 chars from /tasks)',
+    '/copilot  — set default mode to co-pilot (asks before risky steps)',
+    '/autopilot  — set default mode to auto-pilot (no questions)',
+    '/mode  — show current default mode',
+    '/models  — list available agent AI models',
+    '/model <modelId>  — set your preferred agent model',
+    '/unlink  — disconnect this channel from your account',
+    '',
+    'Tips',
+    ' • While a task is WAITING on a question, your next message is the answer.',
+    ' • While a task is RUNNING, your next message is delivered to the agent as',
+    '   a conversational nudge (it will see it on its next step).'
   ].join('\n');
 }
 
@@ -130,6 +138,30 @@ async function handleAgentCommand({ integ, text, channel }) {
       await db.agentTasks.update(t._id, { status: 'cancelled', summary: `Cancelled via ${channel}.` });
     }
     return { handled: true, reply: `🛑 Cancelled ${active.length} task(s).` };
+  }
+
+  // ---------- /current ----------
+  if (cmd === '/current') {
+    const tasks = await db.agentTasks.findByUser(userId);
+    const active = (tasks || []).filter(t => ACTIVE_STATUSES.includes(t.status));
+    if (!active.length) return { handled: true, reply: 'You have no active tasks.' };
+    const current = active[0];
+    const progress = current.maxSteps ? ` (${current.currentStepNumber || 0}/${current.maxSteps})` : '';
+    return { handled: true, reply: `📍 Current task: [${shortId(current._id)}] ${current.status}${progress} — ${current.title}` };
+  }
+
+  // ---------- /switch <id> ----------
+  if (cmd === '/switch') {
+    if (!arg) return { handled: true, reply: 'Usage: /switch <short-id from /tasks>' };
+    const tasks = await db.agentTasks.findByUser(userId);
+    const active = (tasks || []).filter(t => ACTIVE_STATUSES.includes(t.status));
+    const target = active.find(t => String(t._id).toLowerCase().endsWith(arg.toLowerCase()));
+    if (!target) return { handled: true, reply: `No active task ending with "${arg}". Send /tasks to see ids.` };
+    // Move the target task to the front so it becomes the "current" one
+    integ.preferences = integ.preferences || {};
+    integ.preferences.currentTaskId = String(target._id);
+    await db.integrations.update(integ._id, { preferences: integ.preferences });
+    return { handled: true, reply: `✅ Switched to task [${shortId(target._id)}] ${target.title}` };
   }
 
   // ---------- /models ----------

@@ -100,11 +100,14 @@ const users = {
       displayName: doc.displayName || '',
       role: doc.role || 'user',
       plan: 'unlimited',
+      subscription: { plan: 'super_agent', status: 'active', currentPeriodEnd: null, cancelAtPeriodEnd: false },
       credits: 999999,
       totalCreditsPurchased: 0,
       totalCreditsUsed: 0,
       aiRequestsUsed: 0,
-      isSuspended: false,
+      onboardingCompleted: false,
+      builderModel: null,
+      agentModel: null,
       lastLogin: new Date().toISOString()
     });
   },
@@ -197,8 +200,14 @@ const agentSettings = {
         memoryEnabled: true,
         autoExtractMemories: true,
         councilRoles: { strategist: '', executor: '', critic: '', optimizer: '' },
+        councilEnabled: true,
+        councilMembers: undefined,
         maxSubAgents: 3,
-        sessionPersistenceEnabled: false
+        sessionPersistenceEnabled: true,
+        autoExtensionUpdates: false,
+        skillSharing: { miningEnabled: false, publishToGlobalPool: false, learnFromGlobalPool: false, allowGreyDownload: false, allowGreyUpload: false, blockedDomains: [] },
+        newWindowForResearch: false,
+        stepPatternHintsEnabled: false
       });
     }
     return doc;

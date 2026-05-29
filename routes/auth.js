@@ -1,4 +1,4 @@
-// Auth: register, login, profile, change-password.
+// Auth: register, login, profile, change-password, model-preferences.
 // No rate limit, no email enumeration protection — this server is meant
 // to be self-hosted by a single user (or a small trusted group).
 
@@ -6,6 +6,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const db = require('../storage');
 const { generateToken, requireAuth, publicUser } = require('../middleware/auth');
+const { getUserAgentTier, getEffectiveAgentTier } = require('../services/agentTiers');
 
 const router = express.Router();
 
@@ -17,7 +18,7 @@ router.post('/register', async (req, res) => {
     if (!ALLOW_REGISTER) {
       return res.status(403).json({ error: 'Registration is disabled on this server' });
     }
-    const { email, password, displayName } = req.body || {};
+    const { email, password, displayName, tosAccepted, privacyAccepted } = req.body || {};
     if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
     if (!EMAIL_RE.test(email)) return res.status(400).json({ error: 'Invalid email' });
     if (typeof password !== 'string' || password.length < 6) {
@@ -34,8 +35,13 @@ router.post('/register', async (req, res) => {
       displayName: displayName || email.split('@')[0]
     });
 
+    // Create onboarding record
+    try {
+      await db.onboarding.getOrCreate(String(user._id));
+    } catch { /* best effort */ }
+
     const token = generateToken(user._id);
-    res.status(201).json({ token, user: publicUser(user) });
+    res.status(201).json({ token, user: publicUser(user), onboardingCompleted: false });
   } catch (e) {
     console.error('[auth/register]', e);
     res.status(500).json({ error: 'Failed to create account' });
@@ -63,7 +69,29 @@ router.post('/login', async (req, res) => {
 });
 
 router.get('/profile', requireAuth, async (req, res) => {
-  res.json({ user: publicUser(req.user) });
+  try {
+    const { tierKey, isSubscriber } = getUserAgentTier(req.user);
+    const { tier } = await getEffectiveAgentTier(req.user);
+    res.json({
+      user: {
+        ...publicUser(req.user),
+        agentTier: {
+          key: tierKey,
+          name: tier.name,
+          maxSteps: tier.maxSteps,
+          maxTrackedTabs: tier.maxTrackedTabs,
+          maxConcurrentTasks: tier.maxConcurrentTasks,
+          maxDailyTasks: tier.maxDailyTasks,
+          useCouncilPrompt: tier.useCouncilPrompt,
+          canPersistSession: !!tier.canPersistSession,
+          sessionPersistenceEnabled: !!tier.sessionPersistenceEnabled
+        },
+        isSubscriber
+      }
+    });
+  } catch (e) {
+    res.json({ user: publicUser(req.user) });
+  }
 });
 
 router.put('/profile', requireAuth, async (req, res) => {
@@ -72,6 +100,25 @@ router.put('/profile', requireAuth, async (req, res) => {
   if (typeof displayName === 'string') patch.displayName = displayName.slice(0, 100);
   const updated = await db.users.update(req.userId, patch);
   res.json({ user: publicUser(updated) });
+});
+
+router.put('/model-preferences', requireAuth, async (req, res) => {
+  try {
+    const { builderModel, agentModel } = req.body || {};
+    const patch = {};
+    if (builderModel !== undefined && builderModel !== null) {
+      if (typeof builderModel !== 'string') return res.status(400).json({ error: 'builderModel must be a string' });
+      patch.builderModel = builderModel;
+    }
+    if (agentModel !== undefined && agentModel !== null) {
+      if (typeof agentModel !== 'string') return res.status(400).json({ error: 'agentModel must be a string' });
+      patch.agentModel = agentModel;
+    }
+    const updated = await db.users.update(req.userId, patch);
+    res.json({ user: publicUser(updated) });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to update model preferences' });
+  }
 });
 
 router.post('/change-password', requireAuth, async (req, res) => {

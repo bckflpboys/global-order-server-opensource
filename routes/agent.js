@@ -4,6 +4,7 @@
 
 const express = require('express');
 const { requireAuth } = require('../middleware/auth');
+const { getEffectiveAgentTier } = require('../services/agentTiers');
 const db = require('../storage');
 
 // Optional services — graceful degradation
@@ -19,15 +20,6 @@ try { webSearchService = require('../services/webSearchService'); } catch {}
 try { taskLock = require('../services/taskLock'); } catch {}
 
 const router = express.Router();
-
-const SUPER_AGENT_TIER = {
-  name: 'super_agent', maxSteps: 500, maxConcurrentTasks: 10, maxDailyTasks: 999,
-  maxTrackedTabs: 20, maxScreenshotsPerTask: 50, maxScreenshotsPerStep: 5,
-  canUseScreenshots: true, canUseMemory: true, canUseSubAgents: true,
-  canPersistSession: true, canScheduleTasks: true, maxScheduledTasks: 50,
-  maxSubAgents: 10, maxCaptureBytes: 50 * 1024 * 1024, maxCapturedFilesPerTask: 50,
-  useCouncilPrompt: true, toolLimit: 0, sessionPersistenceEnabled: true
-};
 
 const VALID_MODES = ['copilot', 'autopilot', 'subagents'];
 const MAX_USER_REPLY_LENGTH = 5000;
@@ -128,7 +120,7 @@ router.post('/plan', requireAuth, async (req, res) => {
     const { prompt, tabUrl, tabTitle, allTabs, mode: bodyMode, modelId, source: bodySource } = req.body;
     const userId = String(req.userId);
     const mode = VALID_MODES.includes(bodyMode) ? bodyMode : 'copilot';
-    const tier = SUPER_AGENT_TIER;
+    const { tier } = await getEffectiveAgentTier(req.user);
 
     const modelConfig = await pickAgentModel(modelId);
     if (!modelConfig) return res.status(503).json({ error: 'No agent-capable AI models available' });
@@ -137,7 +129,7 @@ router.post('/plan', requireAuth, async (req, res) => {
     if (!agentService?.planTask) return res.status(503).json({ error: 'Agent service not available' });
 
     const planResult = await agentService.planTask(prompt, {
-      model: modelConfig.openRouterId, tierConfig: tier, activeTabUrl: tabUrl || '',
+      model: modelConfig.openRouterId, modelConfig, tierConfig: tier, activeTabUrl: tabUrl || '',
       activeTabTitle: tabTitle || '', allTabs: allTabs || [], memoryBlock: plannerCtx.memoryBlock
     });
     if (memoryService?.markMemoriesUsed) memoryService.markMemoriesUsed(plannerCtx.memoryIds);
@@ -183,13 +175,13 @@ router.post('/brief', requireAuth, async (req, res) => {
 
     const modelConfig = await pickAgentModel(modelId);
     if (!modelConfig) return res.status(503).json({ error: 'No agent-capable AI models available' });
-    const tier = SUPER_AGENT_TIER;
+    const { tier } = await getEffectiveAgentTier(req.user);
 
     if (!agentService?.planNextAction) return res.status(503).json({ error: 'Agent service not available' });
     const promptCtx = await buildAgentPromptContext(userId, '', tier);
     const envCtx = await buildEnvironmentContext(userId, req.body, task);
     const result = await agentService.planNextAction(task, null, {
-      model: modelConfig.openRouterId, tierConfig: tier, sessionId: `ge-task-${task._id}`,
+      model: modelConfig.openRouterId, modelConfig, tierConfig: tier, sessionId: `ge-task-${task._id}`,
       environment: envCtx, memoryBlock: promptCtx.memoryBlock, availableTools: promptCtx.availableTools
     });
     if (memoryService?.markMemoriesUsed) memoryService.markMemoriesUsed(promptCtx.memoryIds);
@@ -221,7 +213,7 @@ router.post('/start', requireAuth, async (req, res) => {
     const { prompt, tabUrl, tabTitle, allTabs, mode: bodyMode, modelId, source: bodySource } = req.body;
     const userId = String(req.userId);
     const mode = VALID_MODES.includes(bodyMode) ? bodyMode : 'copilot';
-    const tier = SUPER_AGENT_TIER;
+    const { tier } = await getEffectiveAgentTier(req.user);
 
     const modelConfig = await pickAgentModel(modelId);
     if (!modelConfig) return res.status(503).json({ error: 'No agent-capable AI models available' });
@@ -239,7 +231,7 @@ router.post('/start', requireAuth, async (req, res) => {
     const envCtx = await buildEnvironmentContext(userId, req.body, task);
     const promptCtx = await buildAgentPromptContext(userId, tabUrl || '', tier);
     const result = await agentService.planNextAction(task, { url: tabUrl || '', title: tabTitle || '', visibleText: '' }, {
-      model: modelConfig.openRouterId, tierConfig: tier, sessionId: `ge-task-${task._id}`,
+      model: modelConfig.openRouterId, modelConfig, tierConfig: tier, sessionId: `ge-task-${task._id}`,
       environment: envCtx, memoryBlock: promptCtx.memoryBlock, availableTools: promptCtx.availableTools, allTabs: allTabs || []
     });
     if (memoryService?.markMemoriesUsed) memoryService.markMemoriesUsed(promptCtx.memoryIds);
@@ -268,7 +260,7 @@ router.post('/step', requireAuth, async (req, res) => {
     const { taskId, stepNumber, pageState, modelId } = req.body;
     let { result, error } = req.body;
     const userId = String(req.userId);
-    const tier = SUPER_AGENT_TIER;
+    const { tier } = await getEffectiveAgentTier(req.user);
 
     const task = await db.agentTasks.findById(taskId);
     if (!task || String(task.userId) !== userId) return res.status(404).json({ error: 'Task not found' });
@@ -308,7 +300,7 @@ router.post('/step', requireAuth, async (req, res) => {
     const promptCtx = await buildAgentPromptContext(userId, stepUrl, tier);
     const envCtx = await buildEnvironmentContext(userId, req.body, task);
     const aiResult = await agentService.planNextAction(task, pageState || {}, {
-      model: modelConfig.openRouterId, tierConfig: tier, sessionId: `ge-task-${task._id}`,
+      model: modelConfig.openRouterId, modelConfig, tierConfig: tier, sessionId: `ge-task-${task._id}`,
       environment: envCtx, memoryBlock: promptCtx.memoryBlock, domainRulesBlock: promptCtx.domainRulesBlock,
       availableTools: promptCtx.availableTools
     });

@@ -43,7 +43,8 @@ router.post('/generate', requireAuth, async (req, res) => {
       currentUrl: currentUrl || '',
       currentSite: currentSite || '',
       pageTitle: pageTitle || '',
-      model: model.openRouterId
+      model: model.openRouterId,
+      modelConfig: model
     });
 
     // Find or create the conversation
@@ -190,7 +191,8 @@ router.post('/iterate', requireAuth, async (req, res) => {
 
     const chatHistory = toolDoc?.chatHistory || [];
     const result = await iterateToolFromFeedback(existing, feedback, chatHistory, {
-      model: model.openRouterId
+      model: model.openRouterId,
+      modelConfig: model
     });
 
     // Handle conversational (non-tool) response
@@ -335,7 +337,7 @@ router.post('/generate-stream', requireAuth, async (req, res) => {
     let fullContent = '';
     let streamUsage = null;
 
-    for await (const event of streamChatCompletion(messages, model.openRouterId)) {
+    for await (const event of streamChatCompletion(messages, model.openRouterId, { modelConfig: model })) {
       if (event.type === 'chunk') {
         fullContent = event.fullContent;
         sendSSE('chunk', { content: event.content });
@@ -508,7 +510,7 @@ router.post('/iterate-stream', requireAuth, async (req, res) => {
     let fullContent = '';
     let streamUsage = null;
 
-    for await (const event of streamChatCompletion(messages, model.openRouterId)) {
+    for await (const event of streamChatCompletion(messages, model.openRouterId, { modelConfig: model })) {
       if (event.type === 'chunk') {
         fullContent = event.fullContent;
         sendSSE('chunk', { content: event.content });
